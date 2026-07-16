@@ -1,0 +1,56 @@
+# OS/editor noise
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Vivado local/generated caches
+.Xil/
+*.jou
+*.log
+*.pb
+*.wdb
+*.wcfg
+*.rpt
+*.rpx
+*.dcp
+*.str
+*.tmp
+*.cache/
+*.runs/
+*.sim/
+*.hw/
+*.ip_user_files/
+
+# Vitis/Qt local builds
+build/
+Debug/
+Release/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.pyc
+__pycache__/
+
+# Runtime/generated data, not source
+captures/
+diagnosis*/
+datasets/
+fpga_processed_images/
+raw_images/
+analysis/
+*.avi
+*.mp4
+*.raw
+*.pgm
+*.npy
+*.npz
+
+# Curated binary releases are intentionally tracked under hardware/ and software/.
+!hardware/bitstreams/**
+!hardware/flash/**
+!hardware/flash/**/*.log
+!software/rk3588_yolo_analysis_current/*.rknn
+!software/rk3588_yolo_analysis_current/*.onnx

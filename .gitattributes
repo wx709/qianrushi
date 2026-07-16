@@ -1,0 +1,26 @@
+* text=auto
+
+*.md text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.tcl text eol=lf
+*.v text eol=lf
+*.sv text eol=lf
+*.vhd text eol=lf
+*.xdc text eol=lf
+*.xci text eol=lf
+*.pro text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+CMakeLists.txt text eol=lf
+
+*.bit binary
+*.mcs binary
+*.prm binary
+*.rknn binary
+*.onnx binary
+*.xsa binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary

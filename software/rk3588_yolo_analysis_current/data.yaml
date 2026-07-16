@@ -1,0 +1,7 @@
+path: D:/skin_yolo/fpga/1/raw_fpga_current_names_fpga_processed_20260708
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 1
+names: ['lesion']
