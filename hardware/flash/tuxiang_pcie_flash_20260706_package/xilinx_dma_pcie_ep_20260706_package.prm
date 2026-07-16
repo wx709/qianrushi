@@ -1,0 +1,11 @@
+===================================
+Configuration Memory information
+===================================
+File Format        MCS
+Interface          SPIX4
+Size               16M
+Start Address      0x00000000
+End Address        0x00FFFFFF
+
+Addr1         Addr2         Date                    File(s)
+0x00000000    0x00183BDB    Jul  6 17:23:36 2026    D:/FPGA20251016/tuxiang_pcie/prj/tuxiang_pcie.runs/impl_1/xilinx_dma_pcie_ep.bit
