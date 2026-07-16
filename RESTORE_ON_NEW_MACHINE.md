@@ -93,7 +93,7 @@ OCT 相机采集
   -> FPGA 图像处理
   -> RK3588 缓存 FPGA processed images
   -> YOLO/RKNN 识别
-  -> 10fps H.264 识别视频流
+  -> 约 10fps YOLO/RKNN 识别视频流
 ```
 
 ## 6. 不在仓库中的内容

@@ -3666,3 +3666,70 @@ Windows-side source package was also refreshed:
 ```text
 C:\Users\mechrevo\Desktop\fpga-qt面板源码\LC-OCT-FPGA-QT-source-package_20260709_130750.zip
 ```
+
+## 42. 2026-07-17 H.264 Video Attempt Rolled Back
+
+User tested the H.264/CFR video attempt and reported two regressions:
+
+```text
+1. The recognition video became visibly blurrier.
+2. A 75-frame capture produced a video that appeared shorter than 1 second.
+```
+
+The H.264 video writer and mpv `rkmpp` playback changes were rolled back on
+RK3588 before trying a new optimization. RK3588 was reachable at a new WiFi IP:
+
+```text
+192.168.110.2
+host: elf2-desktop
+ssh host key: ssh-ed25519 255 f5:45:85:80:a7:ff:b1:43:ff:71:0c:dc:37:58:8a:47
+```
+
+Restored board-side files:
+
+```text
+/home/elf/Desktop/yolo/03_rk3588_model/predict_batch.py
+  <- /home/elf/Desktop/yolo/03_rk3588_model/_codex_backups/predict_batch_before_cfr_h264_20260716_141626.py
+
+/home/elf/rk3568_capture/qt_panel/mainwindow.cpp
+  <- /home/elf/rk3568_capture/qt_panel/_codex_backups/mainwindow_before_cfr_h264_20260716_141626.cpp
+```
+
+Rollback verification:
+
+```text
+python3 -m py_compile /home/elf/Desktop/yolo/03_rk3588_model/predict_batch.py
+cd /home/elf/rk3568_capture/qt_panel
+cmake --build build -j2
+
+Result: build succeeded.
+Panel restarted:
+  DISPLAY=:0 XAUTHORITY=/home/elf/.Xauthority ./build/oct_qt_panel --capture-tab
+  pid observed: 22743
+```
+
+Stale generated H.264 YOLO video was deleted so the panel will not reopen it:
+
+```text
+/home/elf/rk3568_capture/captures/20260716_第001次诊断/analysis/yolo_rknn_annotated_stream.mp4
+```
+
+Current post-rollback video writer/player state:
+
+```text
+predict_batch.py:
+  codecs = ["mp4v", "XVID", "MJPG"]
+  suffixes = [".mp4", ".avi", ".avi"]
+
+mainwindow.cpp:
+  mpv args include:
+    --fps=10
+    --speed=1.0
+    --cache=yes
+    --demuxer-readahead-secs=8
+    --vd-lavc-threads=4
+```
+
+Do not reapply the H.264/rkmpp change. Next video optimization should preserve
+clarity and tolerate approximately 10 fps rather than requiring exactly 10.000
+fps.

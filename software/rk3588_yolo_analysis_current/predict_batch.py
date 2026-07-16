@@ -18,7 +18,6 @@ import csv
 import json
 import math
 import os
-import subprocess
 import time
 from pathlib import Path
 from typing import Iterable
@@ -242,76 +241,6 @@ def collect_stream_files(input_dir: Path, stream_name: str, recursive: bool) -> 
     return collect_images(input_dir, recursive=recursive)
 
 
-class FfmpegCfrVideoWriter:
-    """Write fixed-frame-rate H.264 so mpv playback does not chase variable decode load."""
-
-    def __init__(self, path: Path, size: tuple[int, int], fps: float) -> None:
-        self.path = path
-        self.width, self.height = size
-        self.closed = False
-        fps_text = f"{fps:.6f}".rstrip("0").rstrip(".") or "10"
-        gop = str(max(1, int(round(fps))))
-        cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "rawvideo",
-            "-pix_fmt", "bgr24",
-            "-s:v", f"{self.width}x{self.height}",
-            "-r", fps_text,
-            "-i", "-",
-            "-an",
-            "-vf", f"fps={fps_text},setpts=N/({fps_text}*TB)",
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-tune", "zerolatency",
-            "-b:v", "120M",
-            "-maxrate", "120M",
-            "-bufsize", "240M",
-            "-g", gop,
-            "-bf", "0",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            str(path),
-        ]
-        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-        if self.proc.stdin is None:
-            raise RuntimeError("ffmpeg stdin is not available")
-
-    def write(self, frame: np.ndarray) -> None:
-        if self.closed:
-            return
-        if self.proc.poll() is not None:
-            raise RuntimeError(f"ffmpeg exited before video write completed: {self.path}")
-        if frame.shape[:2] != (self.height, self.width):
-            frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        if frame.dtype != np.uint8:
-            frame = np.clip(frame, 0, 255).astype(np.uint8)
-        if frame.ndim == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        elif frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-        self.proc.stdin.write(np.ascontiguousarray(frame).tobytes())
-
-    def release(self) -> None:
-        if self.closed:
-            return
-        self.closed = True
-        try:
-            if self.proc.stdin is not None:
-                self.proc.stdin.close()
-            stderr = b""
-            if self.proc.stderr is not None:
-                stderr = self.proc.stderr.read()
-            ret = self.proc.wait(timeout=180)
-        except subprocess.TimeoutExpired:
-            self.proc.kill()
-            self.proc.wait()
-            print(f"ffmpeg_video_writer_timeout: {self.path}")
-            return
-        if ret != 0:
-            msg = stderr.decode("utf-8", errors="ignore").strip()
-            print(f"ffmpeg_video_writer_failed: ret={ret} path={self.path} {msg}")
-
-
 def open_video_writer(path: Path, size: tuple[int, int], fps: float = VIDEO_FPS):
     path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in (".avi", ".mp4"):
@@ -319,15 +248,8 @@ def open_video_writer(path: Path, size: tuple[int, int], fps: float = VIDEO_FPS)
             path.with_suffix(suffix).unlink()
         except FileNotFoundError:
             pass
-
-    h264_path = path.with_suffix(".mp4")
-    try:
-        return FfmpegCfrVideoWriter(h264_path, size, fps), h264_path
-    except Exception as exc:
-        print(f"ffmpeg_h264_writer_unavailable: {exc}")
-
-    codecs = ["MJPG", "XVID", "mp4v"]
-    suffixes = [".avi", ".avi", ".mp4"]
+    codecs = ["mp4v", "XVID", "MJPG"]
+    suffixes = [".mp4", ".avi", ".avi"]
     for codec, suffix in zip(codecs, suffixes):
         out_path = path.with_suffix(suffix)
         try:

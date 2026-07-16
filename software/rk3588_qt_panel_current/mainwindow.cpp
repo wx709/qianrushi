@@ -3098,11 +3098,11 @@ bool MainWindow::openAnalysisVideo(const QString &diagnosis_dir) {
     args << QStringLiteral("--force-window=yes")
          << QStringLiteral("--keep-open=yes")
          << QStringLiteral("--loop-file=no")
+         << QStringLiteral("--fps=10")
          << QStringLiteral("--speed=1.0")
-         << QStringLiteral("--hwdec=rkmpp")
-         << QStringLiteral("--video-sync=display-resample")
-         << QStringLiteral("--framedrop=no")
-         << QStringLiteral("--cache=no")
+         << QStringLiteral("--cache=yes")
+         << QStringLiteral("--demuxer-readahead-secs=8")
+         << QStringLiteral("--vd-lavc-threads=4")
          << video_path;
   } else if (QFileInfo(QStringLiteral("/usr/bin/ffplay")).isFile()) {
     player = QStringLiteral("/usr/bin/ffplay");

@@ -41,7 +41,7 @@ docs/guides/
 - FPGA：当前 `tuxiang_pcie` 图像处理 bitstream 已生成、下载、固化到升腾 Pro Flash，并通过 RK3588 PCIe/XDMA smoke test。
 - RK3588 面板：当前 Qt 面板保留实时原始图和 FPGA 处理图显示；点击“分析识别”时只打开 YOLO/RKNN 识别视频流。
 - YOLO/RKNN：当前模型为 `yolov8n_fpga1_full650_best.rknn`，分析输入是 FPGA 处理后的缓存图像。
-- 视频流：当前 `predict_batch.py` 生成 4096x2048、10fps、H.264 CFR、无 B 帧视频；mpv 使用 RK3588 `rkmpp` 硬解播放。
+- 视频流：当前已回退到 H.264 优化前的旧版逻辑；YOLO/RKNN 视频由 `predict_batch.py` 生成，Qt 面板用 mpv 打开。下一版视频稳定化方案待确认后再更新。
 
 ## 继续工作建议
 
