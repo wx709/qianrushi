@@ -140,6 +140,8 @@ class MainWindow : public QMainWindow {
   void writeVisitManifest(const QString &visit_dir, const QString &visit_id, int visit_index);
   bool openFolderOnDesktop(const QString &dir, const QString &title);
   bool startPythonAnalysis(const QString &diagnosis_dir, bool open_when_finished);
+  QString latestAnalysisInputDir(const QString &diagnosis_dir) const;
+  bool analysisCacheMatchesLatestInput(const QString &diagnosis_dir) const;
   QString findAnalysisVideo(const QString &diagnosis_dir) const;
   bool openAnalysisVideo(const QString &diagnosis_dir);
   void saveAutoTestScreenshot(const QString &stem);

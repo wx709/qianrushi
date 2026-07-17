@@ -23,6 +23,8 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QList>
 #include <QMessageBox>
@@ -93,7 +95,7 @@ constexpr quint32 kMotorControlAbort = 0x80;
 constexpr size_t kFpgaBarMapSize = 0x10000;
 constexpr bool kUseDatasetCaptureMode = true;
 constexpr int kDatasetAutoStopFrames = 0;
-constexpr int kDatasetAnalysisMaxFrames = 100;
+constexpr int kDatasetAnalysisMaxFrames = 0;
 constexpr int kDatasetAutoTestFrames = 75;
 constexpr int kDatasetDisplayIntervalMs = 100;
 const char *kZynqSerialDefaultPort = "/dev/ttyUSB0";
@@ -107,6 +109,36 @@ QStringList analysisVideoFileNames() {
   return QStringList()
          << QStringLiteral("yolo_rknn_annotated_stream.mp4")
          << QStringLiteral("yolo_rknn_annotated_stream.avi");
+}
+
+QStringList processedImageNameFilters() {
+  return QStringList()
+         << QStringLiteral("*.pgm")
+         << QStringLiteral("*.png")
+         << QStringLiteral("*.jpg")
+         << QStringLiteral("*.jpeg")
+         << QStringLiteral("*.bmp")
+         << QStringLiteral("*.tif")
+         << QStringLiteral("*.tiff")
+         << QStringLiteral("*.raw");
+}
+
+int processedFrameCount(const QString &capture_dir) {
+  const QDir processed_dir(
+      QDir(capture_dir).filePath(QStringLiteral("fpga_processed_images")));
+  if (!processed_dir.exists()) {
+    return 0;
+  }
+
+  int count = 0;
+  const QFileInfoList files = processed_dir.entryInfoList(
+      processedImageNameFilters(), QDir::Files, QDir::Name);
+  for (const QFileInfo &file : files) {
+    if (!file.fileName().startsWith(QStringLiteral("__"))) {
+      ++count;
+    }
+  }
+  return count;
 }
 
 bool containsOctCamera(const QString &text) {
@@ -3030,7 +3062,9 @@ void MainWindow::onWorkerFinished(bool ok, const QString &message) {
   }
 
   setRunningUi(false);
-  if (ok && !stopped_by_user) {
+  const QString current_capture_dir =
+      QDir(current_visit_dir_).filePath(QStringLiteral("captures"));
+  if ((ok || stopped_by_user) && processedFrameCount(current_capture_dir) > 0) {
     startPythonAnalysis(current_diagnosis_dir_, false);
   }
 }
@@ -3063,8 +3097,63 @@ void MainWindow::onOpenLastSessionClicked() {
   QDesktopServices::openUrl(QUrl::fromLocalFile(diagnosis_dir));
 }
 
+QString MainWindow::latestAnalysisInputDir(const QString &diagnosis_dir) const {
+  const QDir diagnosis(diagnosis_dir);
+  if (!diagnosis.exists()) {
+    return QString();
+  }
+
+  QString latest_capture_dir;
+  QDateTime latest_modified;
+  const QFileInfoList visits = diagnosis.entryInfoList(
+      QStringList() << QStringLiteral("visit_*"), QDir::Dirs | QDir::NoDotAndDotDot,
+      QDir::Time);
+  for (const QFileInfo &visit : visits) {
+    const QString capture_dir = QDir(visit.absoluteFilePath()).filePath(QStringLiteral("captures"));
+    if (processedFrameCount(capture_dir) == 0) {
+      continue;
+    }
+    const QFileInfo processed_dir(
+        QDir(capture_dir).filePath(QStringLiteral("fpga_processed_images")));
+    if (latest_capture_dir.isEmpty() || processed_dir.lastModified() > latest_modified) {
+      latest_capture_dir = capture_dir;
+      latest_modified = processed_dir.lastModified();
+    }
+  }
+
+  if (!latest_capture_dir.isEmpty()) {
+    return latest_capture_dir;
+  }
+  return processedFrameCount(diagnosis_dir) > 0 ? diagnosis_dir : QString();
+}
+
+bool MainWindow::analysisCacheMatchesLatestInput(const QString &diagnosis_dir) const {
+  const QString input_dir = latestAnalysisInputDir(diagnosis_dir);
+  const int input_frames = processedFrameCount(input_dir);
+  if (input_dir.isEmpty() || input_frames <= 0) {
+    return false;
+  }
+
+  QFile summary(QDir(diagnosis_dir).filePath(
+      QStringLiteral("analysis/analysis_summary.json")));
+  if (!summary.open(QIODevice::ReadOnly)) {
+    return false;
+  }
+  const QJsonDocument document = QJsonDocument::fromJson(summary.readAll());
+  if (!document.isObject()) {
+    return false;
+  }
+  const QJsonObject object = document.object();
+  const QString cached_input = QDir::cleanPath(object.value(QStringLiteral("input_dir")).toString());
+  const int cached_frames = object.value(QStringLiteral("records")).toInt(-1);
+  return cached_input == QDir::cleanPath(input_dir) && cached_frames == input_frames;
+}
+
 QString MainWindow::findAnalysisVideo(const QString &diagnosis_dir) const {
   if (diagnosis_dir.isEmpty()) {
+    return QString();
+  }
+  if (!analysisCacheMatchesLatestInput(diagnosis_dir)) {
     return QString();
   }
   const QDir analysis_dir(QDir(diagnosis_dir).filePath(QStringLiteral("analysis")));
@@ -3158,26 +3247,9 @@ bool MainWindow::startPythonAnalysis(const QString &diagnosis_dir, bool open_whe
     return false;
   }
 
-  bool has_fpga_processed_input = false;
-  QDirIterator fpga_it(diagnosis.absolutePath(),
-                       QStringList() << QStringLiteral("*.pgm")
-                                     << QStringLiteral("*.png")
-                                     << QStringLiteral("*.jpg")
-                                     << QStringLiteral("*.jpeg")
-                                     << QStringLiteral("*.bmp")
-                                     << QStringLiteral("*.tif")
-                                     << QStringLiteral("*.tiff")
-                                     << QStringLiteral("*.raw"),
-                       QDir::Files,
-                       QDirIterator::Subdirectories);
-  while (fpga_it.hasNext()) {
-    const QString path = QDir::cleanPath(fpga_it.next());
-    if (path.contains(QStringLiteral("/fpga_processed_images/"))) {
-      has_fpga_processed_input = true;
-      break;
-    }
-  }
-  if (!has_fpga_processed_input) {
+  const QString input_dir = latestAnalysisInputDir(diagnosis_dir);
+  const int input_frames = processedFrameCount(input_dir);
+  if (input_frames <= 0) {
     appendLog(QString("Python analysis blocked: no FPGA processed images under %1")
                   .arg(diagnosis_dir));
     if (open_when_finished) {
@@ -3216,13 +3288,15 @@ bool MainWindow::startPythonAnalysis(const QString &diagnosis_dir, bool open_whe
 
   QStringList args;
   args << script_path
-       << QStringLiteral("--input-dir") << diagnosis_dir
+       << QStringLiteral("--input-dir") << input_dir
        << QStringLiteral("--output-csv") << output_csv
        << QStringLiteral("--output-jsonl") << output_jsonl
-       << QStringLiteral("--max-frames") << QString::number(kDatasetAnalysisMaxFrames)
        << QStringLiteral("--display") << QStringLiteral("never")
        << QStringLiteral("--require-fpga-processed")
        << QStringLiteral("--recursive");
+  if (kDatasetAnalysisMaxFrames > 0) {
+    args << QStringLiteral("--max-frames") << QString::number(kDatasetAnalysisMaxFrames);
+  }
 
   appendLog(QString("Starting Python analysis: python3 %1").arg(args.join(' ')));
   appendKeyStatus(QStringLiteral("正在分析识别"));

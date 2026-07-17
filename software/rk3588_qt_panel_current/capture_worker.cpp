@@ -62,7 +62,7 @@ constexpr size_t kDatasetProcessedHeight = kDatasetRawHeight / kDatasetAverageRo
 constexpr size_t kDatasetRealtimePreviewHeight = kDatasetRawHeight;
 constexpr uint16_t kDatasetAdcMask = 0x0FFF;
 constexpr int kDatasetLogEveryFrames = 30;
-constexpr int kDatasetAnalysisCacheFrames = 100;
+constexpr int kDatasetAnalysisCacheFrames = 0;
 
 QString readTextFileTrimmed(const QString &path) {
   QFile file(path);
@@ -1447,8 +1447,9 @@ void CaptureWorker::process() {
         if (stop_requested_.load()) {
           break;
         }
-        const bool cache_this_frame =
-            cache_dataset_analysis && used_fpga && (saved_frames < kDatasetAnalysisCacheFrames);
+        const bool cache_this_frame = cache_dataset_analysis && used_fpga &&
+                                      (kDatasetAnalysisCacheFrames <= 0 ||
+                                       saved_frames < kDatasetAnalysisCacheFrames);
         const bool write_this_frame = settings_.save_raw || settings_.save_pgm || cache_this_frame;
         QString raw_base = preview_path;
         QString processed_base;

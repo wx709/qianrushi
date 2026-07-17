@@ -3733,3 +3733,69 @@ mainwindow.cpp:
 Do not reapply the H.264/rkmpp change. Next video optimization should preserve
 clarity and tolerate approximately 10 fps rather than requiring exactly 10.000
 fps.
+
+## 43. 2026-07-17 Latest Visit Analysis Cache Fix
+
+Problem found after H.264 rollback:
+
+```text
+The user captured a second visit under the same diagnosis, but clicking
+"analysis recognition" reopened the previous 80-frame video.
+```
+
+Root causes:
+
+```text
+1. Analysis output is stored at diagnosis/analysis, while each capture is stored
+   under diagnosis/visit_NNN/captures.
+2. The panel previously accepted any existing yolo_rknn_annotated_stream file
+   without checking whether it matched the newest visit.
+3. The dataset capture path cached at most 100 FPGA frames.
+4. The panel passed --max-frames 100 to predict_batch.py.
+5. __live_fpga_preview.pgm was a transient display file that should not become
+   a YOLO/video frame.
+```
+
+Fix deployed to RK3588:
+
+```text
+/home/elf/rk3568_capture/qt_panel/mainwindow.cpp/.h
+  - identifies the latest visit_NNN/captures directory that contains real FPGA
+    processed frames;
+  - runs analysis only on that latest visit, not all historical visits under the
+    diagnosis;
+  - validates analysis_summary.json input_dir and records count before opening
+    a cached video;
+  - regenerates analysis when an old video does not match the latest visit;
+  - removes the 100-frame analysis command-line limit;
+  - starts background analysis after a manually stopped capture if that capture
+    saved at least one processed frame.
+
+/home/elf/rk3568_capture/qt_panel/capture_worker.cpp
+  - removes the 100-frame FPGA analysis-cache limit. A manual capture now caches
+    every real FPGA processed frame until the user stops acquisition.
+
+/home/elf/Desktop/yolo/03_rk3588_model/predict_batch.py
+  - interprets --max-frames <= 0 as unlimited;
+  - ignores names beginning with __, including __live_fpga_preview.pgm;
+  - clears old analysis/annotated JPG output before each run.
+```
+
+Build and current-cache verification:
+
+```text
+python3 -m py_compile predict_batch.py: passed
+cmake --build build -j2: passed
+new Qt panel pid observed: 352605
+
+Existing visit_002 was captured before the cache-limit fix, so it contained:
+  real FPGA PGM frames: 100
+
+It was reanalyzed with the new latest-visit logic:
+  input_dir: .../visit_002/captures
+  records: 100
+  annotated JPG frames: 100
+  output video: MPEG-4, 4096x2048, 100 frames, 10.0 s, 10 fps
+```
+
+The next fresh capture is no longer restricted to 100 cached/analysis frames.

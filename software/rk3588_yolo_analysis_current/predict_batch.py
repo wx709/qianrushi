@@ -214,6 +214,7 @@ def collect_images(root: Path, recursive: bool) -> list[Path]:
         p for p in iterator
         if p.is_file()
         and p.suffix.lower() in IMAGE_SUFFIXES
+        and not p.name.startswith("__")
         and "analysis" not in {part.lower() for part in p.parts}
     ]
     # Prefer displayable files over huge raw files when both exist.
@@ -585,6 +586,9 @@ def analyze_images(processed_files: list[Path], analysis_dir: Path,
     records = []
     annotated_dir = analysis_dir / "annotated"
     annotated_dir.mkdir(parents=True, exist_ok=True)
+    for stale_frame in annotated_dir.iterdir():
+        if stale_frame.is_file() and stale_frame.suffix.lower() in {".jpg", ".jpeg"}:
+            stale_frame.unlink()
     writer = None
     annotated_video_path = ""
     show_window = should_display(display_mode)
@@ -685,7 +689,8 @@ def main():
     parser.add_argument("--output-csv", required=True)
     parser.add_argument("--output-jsonl", required=True)
     parser.add_argument("--recursive", action="store_true")
-    parser.add_argument("--max-frames", type=int, default=300)
+    parser.add_argument("--max-frames", type=int, default=0,
+                        help="Maximum frames to analyze; 0 means all frames.")
     parser.add_argument("--display", choices=("auto", "always", "never"), default="auto")
     parser.add_argument("--display-width", type=int, default=1280)
     parser.add_argument("--require-fpga-processed", action="store_true")
@@ -706,8 +711,9 @@ def main():
     raw_count = 0
     processed_video = ""
     processed_count = 0
+    analysis_files = processed_files if args.max_frames <= 0 else processed_files[:args.max_frames]
     records, engine, analysis_ms, annotated_video = analyze_images(
-        processed_files[:args.max_frames], analysis_dir,
+        analysis_files, analysis_dir,
         display_mode=args.display,
         display_width=args.display_width,
         fps=VIDEO_FPS)
